@@ -1,0 +1,188 @@
+OR1-GTN-CORE1 LOCAL PEER = 34.211.212.162
+OR1-GTN-CORE2 LOCAL PEER = 35.161.246.107
+
+<PRODUCT> = PRODUCT (i.e. IS for InsuranceSuite)
+<CUST> = Customer Name (i.e. GRNL for Grinnell)
+<ASN> = AWS ASN (i.e. 64512)
+<ZONE> = Customer Zone (i.e. is_cust or in_cust)
+<CIDR> = Customer CIDR Range
+
+<PRI_TUN_ID> = Primary Tunnel Number (i.e. 1000)
+c0r3_to_<CUST> = Primary BGP Password
+<PRI_PEER> = Primary Tunnel Peer IP (i.e. 35.173.45.240)
+<PRI_LOC> = Primary Local Tunnel IP (i.e. 169.254.47.206)
+<PRI_UP> = Primary Upstream Tunnel IP (i.e. 169.254.47.205)
+
+<BKP_TUN_ID> = Backup Tunnel Number (i.e. 1001)
+c0r3_to_<CUST> = Backup BGP Password
+<BKP_PEER> = Backup Tunnel Peer IP
+<BKP_LOC> = Backup Local Tunnel IP
+<BKP_UP> = Backup Upstream Tunnel IP
+
+####  PRIMARY CONNECTION ####
+
+edit network interface tunnel units tunnel.<PRI_TUN_ID>
+  set comment <PRODUCT>-<CUST>-1
+  set ip <PRI_LOC>/30
+  set mtu 1427
+  set interface-management-profile PING_ONLY
+  top
+
+set zone <ZONE> network layer3 tunnel.<PRI_TUN_ID>
+set network virtual-router default interface tunnel.<PRI_TUN_ID>
+set network tunnel ipsec <PRODUCT>-<CUST>-1 tunnel-interface tunnel.<PRI_TUN_ID>
+set import network interface tunnel.<PRI_TUN_ID>
+
+edit network ike gateway <PRODUCT>-<CUST>-1
+  set peer-address ip <PRI_PEER>
+  set authentication pre-shared-key key c0r3_to_<CUST>
+  set protocol ikev1 dpd enable yes
+  set protocol ikev1 dpd interval 10
+  set protocol ikev1 dpd retry 3
+  set protocol ikev1 exchange-mode main
+  set protocol ikev2 dpd enable yes
+  set protocol version ikev1
+  set protocol-common nat-traversal enable no
+  set protocol-common fragmentation enable no
+  set local-address interface ethernet1/1
+  top
+
+edit network tunnel ipsec <PRODUCT>-<CUST>-1
+  set auto-key ike-gateway <PRODUCT>-<CUST>-1
+  set tunnel-monitor destination-ip <PRI_UP>
+  set tunnel-monitor enable yes
+  set tunnel-monitor tunnel-monitor-profile default
+  set tunnel-interface tunnel.<PRI_TUN_ID>
+  top
+
+edit network virtual-router default protocol bgp peer-group <PRODUCT>-<CUST> peer <PRODUCT>-<CUST>-1
+  set peer-as <ASN>
+  set local-address ip <PRI_LOC>/30
+  set local-address interface tunnel.<PRI_TUN_ID>
+  set peer-address ip <PRI_UP>
+  set enable yes
+  set connection-options incoming-bgp-connection remote-port 0
+  set connection-options incoming-bgp-connection allow yes
+  set connection-options outgoing-bgp-connection local-port 0
+  set connection-options outgoing-bgp-connection allow yes
+  set connection-options multihop 0
+  set connection-options keep-alive-interval 30
+  set connection-options open-delay-time 0
+  set connection-options hold-time 90
+  set connection-options idle-hold-time 15
+  set subsequent-address-family-identifier unicast yes
+  set subsequent-address-family-identifier multicast no
+  set bfd profile Inherit-vr-global-setting
+  set max-prefixes 5000
+  set enable-mp-bgp no
+  set address-family-identifier ipv4
+  set enable yes
+  set enable-sender-side-loop-detection yes
+  set reflector-client non-client
+  set peering-type unspecified
+  top
+
+####  BACKUP CONNECTION ####
+
+edit network interface tunnel units tunnel.<BKP_TUN_ID>
+  set comment <PRODUCT>-<CUST>-2
+  set ip <BKP_LOC>/30
+  set mtu 1427
+  set interface-management-profile PING_ONLY
+  top
+
+set zone <ZONE> network layer3 tunnel.<BKP_TUN_ID>
+set network virtual-router default interface tunnel.<BKP_TUN_ID>
+set network tunnel ipsec <PRODUCT>-<CUST>-2 tunnel-interface tunnel.<BKP_TUN_ID>
+set import network interface tunnel.<BKP_TUN_ID>
+
+edit network ike gateway <PRODUCT>-<CUST>-2
+  set peer-address ip <BKP_PEER>
+  set authentication pre-shared-key key c0r3_to_<CUST>
+  set protocol ikev1 dpd enable yes
+  set protocol ikev1 dpd interval 10
+  set protocol ikev1 dpd retry 3
+  set protocol ikev1 exchange-mode main
+  set protocol ikev2 dpd enable yes
+  set protocol version ikev1
+  set protocol-common nat-traversal enable no
+  set protocol-common fragmentation enable no
+  set local-address interface ethernet1/1
+  top
+
+edit network tunnel ipsec <PRODUCT>-<CUST>-2
+  set tunnel-monitor destination-ip <BKP_UP>
+  set tunnel-interface tunnel.<BKP_TUN_ID>
+  set auto-key ike-gateway <PRODUCT>-<CUST>-2
+  set tunnel-monitor enable yes
+  set tunnel-monitor tunnel-monitor-profile default
+  top
+
+edit network virtual-router default protocol bgp peer-group <PRODUCT>-<CUST> peer <PRODUCT>-<CUST>-2
+  set peer-as <ASN>
+  set local-address ip <BKP_LOC>/30
+  set local-address interface tunnel.<BKP_TUN_ID>
+  set peer-address ip <BKP_UP>
+  set type ebgp import-nexthop original
+  set connection-options incoming-bgp-connection remote-port 0
+  set connection-options incoming-bgp-connection allow yes
+  set connection-options outgoing-bgp-connection local-port 0
+  set connection-options outgoing-bgp-connection allow yes
+  set connection-options multihop 0
+  set connection-options keep-alive-interval 30
+  set connection-options open-delay-time 0
+  set connection-options hold-time 90
+  set connection-options idle-hold-time 15
+  set subsequent-address-family-identifier unicast yes
+  set subsequent-address-family-identifier multicast no
+  set bfd profile Inherit-vr-global-setting
+  set max-prefixes 5000
+  set enable-mp-bgp no
+  set address-family-identifier ipv4
+  set enable yes
+  set enable-sender-side-loop-detection yes
+  set reflector-client non-client
+  set peering-type unspecified
+  top
+
+edit network virtual-router default protocol bgp policy export rules <PRODUCT>-<CUST>
+  set action allow update as-path none
+  set action allow update community none
+  set action allow update extended-community none
+  set action allow update origin incomplete
+  set action allow update med <MED>
+  set match address-prefix 10.141.0.40/32 exact yes
+  set match route-table unicast
+  set used-by <PRODUCT>-<CUST>
+  set enable yes
+  top
+
+edit network virtual-router default protocol bgp policy import rules <PRODUCT>-<CUST>
+  set action allow update as-path none
+  set action allow update community none
+  set action allow update local-preference <LP>
+  set action allow update extended-community none
+  set action allow update origin incomplete
+  set match address-prefix <CIDR> exact yes
+  set match route-table unicast
+  set used-by <PRODUCT>-<CUST>
+  set enable yes
+  top
+
+edit network virtual-router default protocol ospf
+  set area 0.0.0.0 interface tunnel.<PRI_TUN_ID> enable yes
+  set area 0.0.0.0 interface tunnel.<PRI_TUN_ID> passive yes
+  set area 0.0.0.0 interface tunnel.<PRI_TUN_ID> link-type p2p
+  set area 0.0.0.0 interface tunnel.<BKP_TUN_ID> enable yes
+  set area 0.0.0.0 interface tunnel.<BKP_TUN_ID> passive yes
+  set area 0.0.0.0 interface tunnel.<BKP_TUN_ID> link-type p2p
+  top
+
+
+
+  #### Verification Commands (after commit) ####
+
+show routing protocol bgp peer peer-name <PRODUCT>-<CUST>-1 | match status
+show routing protocol bgp peer peer-name <PRODUCT>-<CUST>-2 | match status
+show routing protocol bgp loc-rib peer <PRODUCT>-<CUST>-1
+show routing protocol bgp loc-rib peer <PRODUCT>-<CUST>-2
